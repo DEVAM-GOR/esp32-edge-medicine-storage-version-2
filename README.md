@@ -207,7 +207,6 @@ Sensor Threshold Breached → Node Logic → Relay/Servo (< 40ms)
 
 | Metric | Value |
 |---|---|
-| Local actuation latency | ~20–40ms |
 | ESP-NOW packet delivery | Sub-millisecond (MAC layer) |
 | Override window | 10 seconds |
 | Sensor polling | Non-blocking (millis-based) |
