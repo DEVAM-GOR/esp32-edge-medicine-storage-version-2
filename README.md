@@ -23,7 +23,6 @@ This is **v2** of this project.
 |---|---|---|
 | **Protocol** | BLE Mesh + nRF Mesh App | ESP-NOW (peer-to-peer, MAC layer) |
 | **Cloud** | Anedya Cloud | Blynk IoT |
-| **Control latency** | ~200–500ms (BLE mesh overhead) | ~20–40ms |
 | **Router required** | Yes | No |
 | **Peer setup** | nRF mesh provisioning | MAC address registration |
 | **Coexistence** | Separate radio | ESP-NOW + WiFi on single 2.4GHz radio |
