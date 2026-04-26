@@ -246,7 +246,7 @@ PWM:        LEDC (ESP32 hardware PWM)
 | ESP-NOW MAC addresses must be hardcoded | Recorded MACs at startup via `esp_wifi_get_mac()`, registered with `esp_now_add_peer()` |
 | ESP-NOW + WiFi channel conflict | Connected WiFi first to lock channel, bound ESP-NOW peers to same channel |
 | Sensor logic cancelling manual overrides | `overrideActive` boolean flag + millis() timestamp blocks auto logic for 10s |
-| Servo jitter from relay switching | Power domain separation + decoupling capacitors |
+| Servo jitter from relay switching | 
 
 ---
 
