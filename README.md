@@ -358,6 +358,3 @@ Smart-Medicine-Storage-Monitor
 
 ---
 
-# License
-
-This project is intended for educational purposes and embedded systems learning.
