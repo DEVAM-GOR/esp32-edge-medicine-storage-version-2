@@ -1,265 +1,363 @@
-# Smart Medicine Storage Monitor
-### ESP32 · ESP-NOW · Blynk IoT · Edge-First Architecture
+# Smart Medicine Storage Monitoring System
 
-> A distributed 3-node IoT system for real-time pharmaceutical storage monitoring and autonomous actuation — built with edge-first control logic, sub-100ms response latency, and cloud visibility via Blynk.
+### ESP32 · ESP-NOW · Blynk IoT · Distributed Embedded System
 
----
-
-## Why I Built This
-
-Medicines are failing patients silently.
-
-Not because of bad doctors or wrong prescriptions — but because of a humidity spike nobody caught, a light exposure that lasted too long, or a temperature breach between two manual checks. The WHO estimates a large fraction of medicines lose efficacy due to exactly these unmonitored storage failures.
-
-I wanted to build a system that actually responds — not just monitors.
+> A distributed IoT-based embedded system that monitors medicine storage conditions using three ESP32 development boards. The system performs local edge-based decision making, wireless communication through ESP-NOW, and remote monitoring using the Blynk IoT platform.
 
 ---
 
-## Evolution: v1 → v2
+# Project Overview
 
-This is **v2** of this project.
+This project implements a distributed embedded architecture consisting of two sensor nodes and one gateway node.
 
-| | v1 (Previous) | v2 (This Repo) |
-|---|---|---|
-| **Protocol** | BLE Mesh + nRF Mesh App | ESP-NOW (peer-to-peer, MAC layer) |
-| **Cloud** | Anedya Cloud | Blynk IoT |
-| **Router required** | Yes | No |
-| **Peer setup** | nRF mesh provisioning | MAC address registration |
-| **Coexistence** | Separate radio | ESP-NOW + WiFi on single 2.4GHz radio |
-
-**Why I switched:**
-BLE Mesh added provisioning complexity and latency that wasn't acceptable for a safety-critical actuation system. ESP-NOW operates at the MAC layer — no TCP/IP, no router, no handshake overhead. For a system where a temperature breach needs a servo response in under 100ms, the protocol choice matters.
+The sensor nodes monitor **temperature, humidity, and ambient light**, while the gateway node bridges ESP-NOW communication with the Blynk IoT platform over Wi-Fi. Critical decisions such as temperature-based servo actuation and relay control are executed locally on the ESP32, allowing the system to continue operating even if cloud connectivity is unavailable.
 
 ---
 
-## System Architecture
+# Key Features
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    LAYER 1: EDGE NODES                  │
-│                                                         │
-│  ┌──────────────────┐      ┌──────────────────────────┐ │
-│  │    NODE 1        │      │        NODE 2            │ │
-│  │  Light Monitor   │      │    Thermal Control       │ │
-│  │                  │      │                          │ │
-│  │  LDR (LM393)     │      │  DHT22 (Temp + Humidity) │ │
-│  │  Relay Module    │      │  Servo Motor (LEDC PWM)  │ │
-│  │  LED Indicator   │      │  Relay Module            │ │
-│  │  Push Button ISR │      │                          │ │
-│  └────────┬─────────┘      └────────────┬─────────────┘ │
-│           │   ESP-NOW (no router)        │               │
-└───────────┼─────────────────────────────┼───────────────┘
-            │                             │
-            ▼                             ▼
-┌─────────────────────────────────────────────────────────┐
-│                 LAYER 2: MASTER GATEWAY                 │
-│                                                         │
-│              ESP32 (Dual-radio hub)                     │
-│         ESP-NOW ←──────────────→ WiFi                   │
-│    Registers peers via MAC address                      │
-│    Forwards telemetry to Blynk (V0–V4)                  │
-│    Relays remote commands back to nodes                 │
-└──────────────────────────┬──────────────────────────────┘
-                           │ WiFi
-                           ▼
-┌─────────────────────────────────────────────────────────┐
-│                  LAYER 3: BLYNK CLOUD                   │
-│                                                         │
-│   V0 → Temperature gauge                               │
-│   V1 → Humidity gauge                                   │
-│   V2 → LDR light status                                 │
-│   V3 → Relay command (Node 1)                           │
-│   V4 → Servo + Relay command (Node 2)                   │
-└─────────────────────────────────────────────────────────┘
-```
-
-**Core design rule: Cloud enhances, never blocks.**
-If WiFi drops, edge nodes keep sensing and actuating autonomously.
+- Distributed 3-node ESP32 architecture
+- ESP-NOW peer-to-peer wireless communication
+- Gateway-based cloud connectivity using Blynk IoT
+- Edge-based local decision making
+- Automatic temperature-based servo actuation
+- Manual override through Blynk and push button
+- Multi-sensor monitoring (Temperature, Humidity & Light)
+- Modular firmware architecture
 
 ---
 
-## Hardware — Node by Node
+# System Objectives
 
-### Node 1 — Light Monitoring Unit
-
-| Component | Pin | Role |
-|---|---|---|
-| LDR Module (LM393) | GPIO27 (DO) | Digital light detection |
-| Relay Module | GPIO5 | External alarm / light control |
-| LED Indicator | GPIO2 | Visual alert |
-| Push Button | GPIO13 (ISR) | Manual override (hardware interrupt) |
-
-**How it works:**
-- LDR resistance changes with light → LM393 comparator converts to digital HIGH/LOW
-- Light detected → relay + LED trigger instantly at the edge
-- Button press fires a hardware ISR → activates 10-second manual override
+- Monitor medicine storage conditions in real time
+- Enable wireless communication between ESP32 nodes
+- Perform local sensor processing and actuator control
+- Provide remote monitoring and manual control through Blynk IoT
+- Develop a modular and scalable embedded system
 
 ---
 
-### Node 2 — Thermal Control Unit
+# System Evolution
 
-| Component | Pin | Role |
-|---|---|---|
-| DHT22 | GPIO4 | Temperature + humidity sensing |
-| Servo Motor | GPIO18 (LEDC PWM) | Cooling simulation (0°–90° sweep) |
-| Relay Module | GPIO (control) | External fan / cooling device |
-
-**How it works:**
-- DHT22 reads continuously (non-blocking, millis() based)
-- Temp ≥ 28°C → servo sweeps via LEDC PWM at ~50Hz + relay activates
-- Relay decouples 3.3V ESP32 logic from high-power cooling loads
+| Feature | Version 1 | Version 2 |
+|----------|-----------|-----------|
+| Communication | BLE Mesh | ESP-NOW |
+| Cloud Platform | Anedya Cloud | Blynk IoT |
+| Network Setup | Mesh Provisioning | Peer Registration |
+| Communication Type | Mesh | Peer-to-Peer |
+| Gateway | BLE Mesh Gateway | ESP32 Wi-Fi Gateway |
 
 ---
 
-### Master Node — Gateway
+# Why ESP-NOW?
 
-- No sensors
-- Registers both nodes via MAC addresses using `esp_now_add_peer()`
-- Runs ESP-NOW and WiFi simultaneously on one 2.4GHz radio
-- Streams data to Blynk virtual pins (V0–V4)
-- Receives Blynk write events and relays commands to target nodes via ESP-NOW
+The initial prototype used BLE Mesh for communication. During development, the communication architecture was redesigned using ESP-NOW because the final system consists of three fixed ESP32 nodes.
+
+Benefits of ESP-NOW for this project:
+
+- Direct peer-to-peer communication
+- Simplified device configuration
+- Lightweight wireless communication
+- Better suited for a fixed embedded network
+- Easy integration with the gateway architecture
 
 ---
 
-## Firmware Design
+# System Architecture
 
-### Priority Arbitration (no RTOS needed)
-
-```
-Priority 1 (Highest): Manual Override
-    → Physical button ISR OR Blynk app command
-    → Active for 10 seconds
-    → All sensor logic paused during window
-
-Priority 2: Automatic Sensor Logic
-    → Runs only when no override is active
-    → Node 1: light → relay + LED
-    → Node 2: temp ≥ 28°C → servo + relay
-
-Priority 3 (Lowest): Idle
-    → All actuators off
-    → Minimal power draw
+```text
+                     +------------------------------+
+                     |         Blynk Cloud          |
+                     | Dashboard & Manual Control   |
+                     +--------------+---------------+
+                                    |
+                                  Wi-Fi
+                                    |
+                     +--------------v---------------+
+                     |      ESP32 Gateway Node      |
+                     |------------------------------|
+                     | ESP-NOW Receiver             |
+                     | Wi-Fi Manager                |
+                     | Packet Decoder               |
+                     | Blynk Communication          |
+                     | Command Dispatcher           |
+                     +------+-----------------------+
+                            |
+                  ESP-NOW Peer Communication
+             +--------------+---------------+
+             |                              |
+     +-------v-------+              +-------v-------+
+     |    Node 1     |              |    Node 2     |
+     | Light Monitor |              | Thermal Unit  |
+     +---------------+              +---------------+
 ```
 
-**Implementation:** `boolean overrideActive` flag + `millis()` timestamp. Zero blocking code. Zero `delay()`.
+---
+
+# Hardware Configuration
+
+## Node 1 – Light Monitoring Unit
+
+| Component | GPIO |
+|----------|------|
+| LDR Module | GPIO27 |
+| Relay Module | GPIO5 |
+| LED Indicator | GPIO2 |
+| Push Button | GPIO13 |
+
+### Responsibilities
+
+- Monitor ambient light
+- Control relay and LED
+- Handle manual override using GPIO interrupt
+- Transmit sensor status through ESP-NOW
 
 ---
 
-### Data Encoding — Two Values, One Packet
+## Node 2 – Thermal Monitoring Unit
 
-Sending temperature AND humidity in a single ESP-NOW `int16_t` frame:
+| Component | GPIO |
+|----------|------|
+| DHT22 | GPIO4 |
+| Servo Motor | GPIO18 |
+| Relay Module | GPIO5 |
+
+### Responsibilities
+
+- Monitor temperature and humidity
+- Compare sensor readings with configured threshold
+- Control servo and relay locally
+- Generate PWM using ESP32 LEDC
+- Transmit telemetry through ESP-NOW
+
+---
+
+## Gateway Node
+
+The gateway node acts as the communication bridge between the ESP-NOW network and the Blynk IoT platform.
+
+### Responsibilities
+
+- Initialize Wi-Fi
+- Initialize ESP-NOW
+- Register peer devices
+- Receive sensor data
+- Decode telemetry packets
+- Update the Blynk dashboard
+- Forward remote commands to sensor nodes
+
+---
+
+# Firmware Architecture
+
+## Sensor Node
+
+```text
+Application
+│
+├── Sensor Acquisition
+├── Threshold Evaluation
+├── Manual Override
+├── Actuator Control
+├── ESP-NOW Communication
+└── Packet Encoding
+```
+
+---
+
+## Gateway Node
+
+```text
+Gateway
+│
+├── ESP-NOW Receiver
+├── Packet Decoder
+├── Wi-Fi Manager
+├── Blynk Communication
+├── Command Dispatcher
+└── Peer Management
+```
+
+---
+
+# Firmware State Machine
+
+```text
+Manual Override
+       │
+       ▼
+Automatic Threshold Control
+       │
+       ▼
+Idle Monitoring
+```
+
+Manual control can be performed using:
+
+- Physical push button
+- Blynk mobile application
+
+During manual override, automatic control is temporarily suspended before normal operation resumes.
+
+---
+
+# Control Logic
+
+## Node 1
+
+```text
+Read LDR
+    │
+Light Detected?
+ ├── YES → Relay ON + LED ON
+ └── NO  → Relay OFF + LED OFF
+```
+
+---
+
+## Node 2
+
+```text
+Read DHT22
+     │
+Temperature ≥ Threshold?
+ ├── YES → Servo Rotate + Relay ON
+ └── NO  → Servo Reset + Relay OFF
+```
+
+---
+
+# Communication Flow
+
+```text
+Sensors
+   │
+Local Processing
+   │
+Threshold Evaluation
+   │
+ESP-NOW
+   │
+Gateway Node
+   │
+Wi-Fi
+   │
+Blynk Cloud
+```
+
+Remote commands follow the reverse path from the Blynk application to the target sensor node through the gateway.
+
+---
+
+# Compact Telemetry Encoding
+
+Temperature and humidity values are encoded into integer payloads before wireless transmission while preserving one decimal place of precision.
 
 ```cpp
-// Encoding (Node 2)
-int16_t tempEncoded  = (int16_t)(temperature * 10);       // e.g. 29.5°C → 295
-int16_t humEncoded   = (int16_t)(1000 + humidity * 10);   // e.g. 50.5% → 1505
-
-// Decoding (Master)
-if (value >= 1000) {
-    humidity    = (value - 1000) / 10.0;   // ≥1000 → humidity
-} else {
-    temperature = value / 10.0;            // <1000 → temperature
-}
+int16_t tempEncoded = temperature * 10;
+int16_t humEncoded  = 1000 + humidity * 10;
 ```
 
-One packet per reading cycle. No extra overhead.
+The gateway decodes the received values before updating the Blynk dashboard.
 
 ---
 
-### ESP-NOW + WiFi Coexistence Fix
+# Embedded Features
 
-Both protocols share the 2.4GHz radio. Without channel alignment, ESP-NOW packets vanish silently.
-
-**Fix:**
-1. Connect WiFi first (locks the channel)
-2. Bind ESP-NOW peers to the same channel
-3. Enable `CONFIG_SW_COEXIST_ENABLE` for automatic time-sharing
-
----
-
-### Servo Jitter Fix
-
-Relay switching caused power rail spikes → servo jitter.
-
-**Fix:**
-- Separate power domains for relay and servo
-- Add decoupling capacitors across servo power pins
-- Common GND discipline across all components
+- Distributed embedded architecture
+- ESP-NOW peer-to-peer communication
+- Gateway-based cloud integration
+- Edge-based local decision making
+- Event-driven firmware
+- Non-blocking scheduling using `millis()`
+- GPIO interrupt handling
+- Hardware PWM using ESP32 LEDC
+- Relay and servo control
+- Manual and automatic operating modes
+- Compact telemetry encoding
+- Modular firmware design
 
 ---
 
-## Control & Data Flow
-
-```
-// Uplink (sense → cloud)
-Node → [ESP-NOW] → Master → [WiFi] → Blynk Dashboard
-
-// Downlink (user → actuator)
-Blynk App → [WiFi] → Master → [ESP-NOW] → Node → Actuator
-
-// Edge (no internet needed)
-Sensor Threshold Breached → Node Logic → Relay/Servo (< 40ms)
-```
-
----
-
-## Measured Performance
-
-| Metric | Value |
-|---|---|
-| ESP-NOW packet delivery | Sub-millisecond (MAC layer) |
-| Override window | 10 seconds |
-| Sensor polling | Non-blocking (millis-based) |
-| Servo PWM frequency | ~50Hz (LEDC) |
-
----
-
-## Tech Stack
-
-```
-Hardware:   ESP32 (×3), DHT22, LDR/LM393, Servo Motor, Relay Modules
-Protocol:   ESP-NOW (peer-to-peer), WiFi
-Cloud:      Blynk IoT (virtual pins V0–V4)
-Firmware:   C/C++ (Arduino framework / ESP-IDF concepts)
-PWM:        LEDC (ESP32 hardware PWM)
-```
-
----
-
-## What I'd Build Next
-
-- [ ] Replace servo with real cooling element (Peltier / fan)
-- [ ] Closed-loop temperature control (PID)
-- [ ] Telemetry buffering + timestamping for breach history
-- [ ] OTA firmware updates via Blynk or HTTPS
-- [ ] Fault detection: sensor timeouts, brownout detection, watchdog timers
-- [ ] Mesh network for 5+ node deployments
-- [ ] Push / SMS alerts on threshold breach
-- [ ] Battery backup + power domain isolation
-
----
-
-## Challenges & How I Solved Them
+# Engineering Challenges
 
 | Challenge | Solution |
-|---|---|
-| ESP-NOW MAC addresses must be hardcoded | Recorded MACs at startup via `esp_wifi_get_mac()`, registered with `esp_now_add_peer()` |
-| ESP-NOW + WiFi channel conflict | Connected WiFi first to lock channel, bound ESP-NOW peers to same channel |
-| Sensor logic cancelling manual overrides | `overrideActive` boolean flag + millis() timestamp blocks auto logic for 10s |
-| Servo jitter from relay switching | 
+|------------|----------|
+| BLE Mesh provisioning complexity | Migrated to ESP-NOW for a fixed three-node architecture |
+| ESP-NOW and Wi-Fi coexistence | Connected Wi-Fi before ESP-NOW initialization and aligned communication channels |
+| Manual override conflicting with automatic control | Implemented state-based override logic |
+| Servo instability | Improved power distribution and common grounding |
+| Periodic sensor updates | Used `millis()`-based scheduling to keep the main loop responsive |
 
 ---
 
-## Real-World Applicability
+# Technologies Used
 
-The relay architecture makes this directly scalable:
+## Hardware
 
-- Swap LED → cooling fan, AC unit, or alarm system
-- No firmware changes needed — relay handles the power domain gap
-- Architecture suits pharmacy cold storage, hospital ICU supply rooms, vaccine logistics
+- ESP32 Development Boards (×3)
+- DHT22 Sensor
+- LDR Module (LM393)
+- Servo Motor
+- Relay Modules
+- Push Button
+- LED Indicator
+
+## Software
+
+- Embedded C++
+- Arduino IDE
+- ESP-NOW
+- Wi-Fi
+- Blynk IoT
+- ESP32 LEDC PWM
 
 ---
 
-*Built by Devam C Gor — 3rd year B.Tech student, Ahmedabad*
-*Open to embedded / IoT firmware internships and roles*
-*📍 Ahmedabad, Gujarat, India*
+# Future Improvements
+
+- OTA firmware updates
+- SD card data logging
+- MQTT integration
+- Battery backup support
+- Additional environmental sensors
+
+---
+
+# Skills Demonstrated
+
+- Embedded Systems
+- Embedded C++
+- ESP32 Firmware Development
+- ESP-NOW
+- Wireless Embedded Communication
+- Sensor Interfacing
+- Hardware Integration
+- Edge Computing
+- GPIO Interrupt Handling
+- PWM Generation
+- Gateway Architecture
+- IoT System Design
+- Distributed Embedded Systems
+- Firmware Debugging
+- System Integration
+
+---
+
+# Repository Structure
+
+```text
+Smart-Medicine-Storage-Monitor
+│
+├── Gateway/
+├── Node1_Light_Monitor/
+├── Node2_Thermal_Control/
+├── Images/
+└── README.md
+```
+
+---
+
+# License
+
+This project is intended for educational purposes and embedded systems learning.
